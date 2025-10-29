@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 module profiles::profiles {
+    use std::option::{Self, Option};
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
-    use sui::event::{Self, Event, EventHandle};
+    use sui::event::{Self, EventHandle};
     use sui::vector;
     use sui::bcs;
     use sui::signer;
     use sui::address;
     use sui::string;
     use sui::timestamp;
+    use sui::object;
 
     /// Developer profile object stored under owner's account
     struct DeveloperProfile has key {
@@ -25,7 +27,6 @@ module profiles::profiles {
         updated_at: u64
     }
 
-
     struct Project has key {
         id: UID,
         owner: address,
@@ -36,7 +37,6 @@ module profiles::profiles {
         created_at: u64
     }
 
-
     struct Certificate has key {
         id: UID,
         owner: address,
@@ -46,12 +46,10 @@ module profiles::profiles {
         issued_at: u64
     }
 
-
     struct VerifierCap has key {
         id: UID,
         admin: address
     }
-
 
     struct ProfileEvent has copy, drop, store {
         owner: address,
@@ -66,7 +64,6 @@ module profiles::profiles {
 
     // ============= Helpers =============
     fun now_seconds(): u64 {
-        // Sui provides timestamp::now_seconds() in many versions
         timestamp::now_seconds()
     }
 
@@ -75,22 +72,29 @@ module profiles::profiles {
     /// Initialize VerifierCap for admin (call once by deployer/admin)
     public entry fun init_admin(admin: &signer, tx: &mut TxContext) {
         let admin_addr = signer::address_of(admin);
-        let cap = VerifierCap { id: UID::new(tx), admin: admin_addr };
+        let cap = VerifierCap { id: object::new(tx), admin: admin_addr };
         move_to(admin, cap);
-        // also create event handle container for indexing if desired
-        let ev = ProfileEvents { id: UID::new(tx), handle: Event::new_handle<ProfileEvent>(tx) };
+
+        let ev = ProfileEvents { id: object::new(tx), handle: event::new_handle<ProfileEvent>(tx) };
         move_to(admin, ev);
     }
 
     /// Create profile. Owner will own the DeveloperProfile object.
-    public entry fun create_profile(owner: &signer, handle: string::String, display_name: string::String, avatar_ptr: Option<string::String>, tx: &mut TxContext) {
+    public entry fun create_profile(
+        owner: &signer,
+        handle: string::String,
+        display_name: string::String,
+        avatar_ptr: Option<string::String>,
+        tx: &mut TxContext
+    ) {
         let owner_addr = signer::address_of(owner);
         let now = now_seconds();
+
         let profile = DeveloperProfile {
-            id: UID::new(tx),
+            id: object::new(tx),
             owner: owner_addr,
-            handle: handle,
-            display_name: display_name,
+            handle,
+            display_name,
             bio_ptr: Option::none<string::String>(),
             social_links: vector::empty<vector<u8>>(),
             avatar_ptr,
@@ -100,15 +104,18 @@ module profiles::profiles {
             updated_at: now
         };
         move_to(owner, profile);
-
-        // emit event using owner's event handle if you want; for simplicity, emit to deployer/admin event handle
-        // If you want global event stream, consider creating a Registry object that holds an EventHandle and is owned by deployer.
     }
 
     /// Update profile fields (owner only)
-    public entry fun update_profile(owner: &signer, new_display: Option<string::String>, new_bio_ptr: Option<string::String>, new_avatar_ptr: Option<string::String>) {
+    public entry fun update_profile(
+        owner: &signer,
+        new_display: Option<string::String>,
+        new_bio_ptr: Option<string::String>,
+        new_avatar_ptr: Option<string::String>
+    ) {
         let owner_addr = signer::address_of(owner);
-        // borrow global mutable profile owned by owner
+        assert!(exists<DeveloperProfile>(owner_addr), 200);
+
         let profile_ref = borrow_global_mut<DeveloperProfile>(owner_addr);
         if (Option::is_some(&new_display)) {
             profile_ref.display_name = Option::extract(new_display);
@@ -122,10 +129,17 @@ module profiles::profiles {
         profile_ref.updated_at = now_seconds();
     }
 
-    public entry fun add_project(owner: &signer, title: string::String, desc_ptr: Option<string::String>, demo_link: Option<string::String>, thumbs: vector<string::String>, tx: &mut TxContext) {
+    public entry fun add_project(
+        owner: &signer,
+        title: string::String,
+        desc_ptr: Option<string::String>,
+        demo_link: Option<string::String>,
+        thumbs: vector<string::String>,
+        tx: &mut TxContext
+    ) {
         let owner_addr = signer::address_of(owner);
         let proj = Project {
-            id: UID::new(tx),
+            id: object::new(tx),
             owner: owner_addr,
             title,
             description_ptr: desc_ptr,
@@ -134,13 +148,18 @@ module profiles::profiles {
             created_at: now_seconds()
         };
         move_to(owner, proj);
-        // you can optionally add project id to profile by moving profile ownership pattern or via off-chain indexer.
     }
 
-    public entry fun add_certificate(owner: &signer, title: string::String, scan_ptr: Option<string::String>, issuer: Option<string::String>, tx: &mut TxContext) {
+    public entry fun add_certificate(
+        owner: &signer,
+        title: string::String,
+        scan_ptr: Option<string::String>,
+        issuer: Option<string::String>,
+        tx: &mut TxContext
+    ) {
         let owner_addr = signer::address_of(owner);
         let cert = Certificate {
-            id: UID::new(tx),
+            id: object::new(tx),
             owner: owner_addr,
             title,
             scan_ptr,
@@ -150,13 +169,16 @@ module profiles::profiles {
         move_to(owner, cert);
     }
 
+    public entry fun delete_profile(owner: &signer) {
+        let addr = signer::address_of(owner);
+        let profile = move_from<DeveloperProfile>(addr);
+        object::delete(profile.id);
+    }
+
     /// Admin-only verify profile (admin must hold VerifierCap resource)
     public entry fun verify_profile(admin: &signer, profile_owner: address) {
         let admin_addr = signer::address_of(admin);
-        // Check VerifierCap exists for signer
         assert!(exists<VerifierCap>(admin_addr), 100);
-        let cap = borrow_global<VerifierCap>(admin_addr);
-        assert!(cap.admin == admin_addr, 101);
 
         let profile_ref = borrow_global_mut<DeveloperProfile>(profile_owner);
         profile_ref.verified_by = Option::some(admin_addr);
@@ -167,7 +189,6 @@ module profiles::profiles {
     public entry fun revoke_verify(admin: &signer, profile_owner: address) {
         let admin_addr = signer::address_of(admin);
         assert!(exists<VerifierCap>(admin_addr), 110);
-        let _cap = borrow_global<VerifierCap>(admin_addr);
         let profile_ref = borrow_global_mut<DeveloperProfile>(profile_owner);
         profile_ref.verified_by = Option::none<address>();
         profile_ref.updated_at = now_seconds();
