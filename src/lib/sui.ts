@@ -1,18 +1,15 @@
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
-export const client = new SuiClient({ url: getFullnodeUrl('testnet') });
 
-export async function createProfile(walletAddress, packageId, handle, display, avatarCid) {
-  const tx = new TransactionBlock();
-  tx.moveCall({
-    target: `${packageId}::profiles::create_profile`,
-    arguments: [
-      tx.pure.address(walletAddress),
-      tx.pure.string(handle),
-      tx.pure.string(display),
-      tx.pure.optionSome(tx.pure.string(avatarCid)),
-    ],
-  });
-  return tx;
-}
+
+export const SUI_NETWORK = (import.meta.env.PUBLIC_SUI_NETWORK as string) || 'testnet';
+export const PKG_ID = (import.meta.env.PUBLIC_PKG_ID as string) || '';
+if (!PKG_ID) throw new Error('❌ Missing PUBLIC_PKG_ID in environment');
+
+export const client = new SuiClient({
+  url: getFullnodeUrl('testnet'),
+});
+
+
+
+
