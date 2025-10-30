@@ -9,6 +9,11 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^5.15.1"
+    "@mysten/dapp-kit": "^0.19.7",
+    "@mysten/sui": "^1.43.2",
+    "@mysten/wallet-standard": "^0.19.5",
+    "@mysten/walrus": "^0.8.2",
+    "astro": "^5.15.1",
+    "zustand": "^5.0.8"
   }
 }

@@ -10,13 +10,9 @@ useEffect(() => {
   if (suiWallet) setWallet(suiWallet);
 }, []);
 
-  return (
-    {wallet ? (
-  <button onClick={() => wallet.connect()}>Connect Sui Wallet</button>
-) : (
-  <p>No wallet detected</p>
-)}
-  )
+return (
+  <h2>hello</h2>
+)
 };
 
 export default WalletConnect;
